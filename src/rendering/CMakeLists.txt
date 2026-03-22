@@ -1,0 +1,2 @@
+add_subdirectory(background)
+add_subdirectory(hud)
