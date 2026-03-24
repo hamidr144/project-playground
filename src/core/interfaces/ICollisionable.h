@@ -15,9 +15,9 @@ struct CollisionBounds {
     CollisionBoundsType type = CollisionBoundsType::Solid;
 };
 
-class ICollisionProvider {
+class ICollisionable {
 public:
-    virtual ~ICollisionProvider() = default;
+    virtual ~ICollisionable() = default;
 
     virtual CollisionBounds GetCollisionBounds() const = 0;
 };

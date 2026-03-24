@@ -2,17 +2,16 @@
 
 #include <vector>
 
+#include "core/interfaces/ICollisionable.h"
 #include "core/interfaces/ICollisionHandler.h"
-#include "core/interfaces/ICollisionProvider.h"
 #include "core/interfaces/IEntity.h"
-#include "game/entities/headers/ScreenBorderCollisionProvider.h"
+#include "game/objects/headers/ScreenBorderCollisionProvider.h"
 #include "cute.h"
 #include <string>
 
 namespace project_playground::game::entities {
 
 class PointEntity : public core::interfaces::IEntity,
-                    public core::interfaces::ICollisionProvider,
                     public core::interfaces::ICollisionHandler {
 public:
     PointEntity(float x, float y, float radius, CF_Color color);
@@ -20,7 +19,7 @@ public:
     std::string_view GetTypeName() const override;
     core::interfaces::CollisionBounds GetCollisionBounds() const override;
     void SetCollisionProviders(
-        std::vector<const core::interfaces::ICollisionProvider*> collisionProviders) override;
+        std::vector<const core::interfaces::ICollisionable*> collisionProviders) override;
     void Update() override;
     void Render() const override;
 
@@ -33,11 +32,16 @@ private:
     std::string GetPositionText() const;
     void HandleCollisions();
     void ResolveCollisionBounds(const core::interfaces::CollisionBounds& collisionBounds);
+    void ResolvePointCollision(const PointEntity& otherPoint);
+    void SetResolvedVelocityX(float resolvedVelocityX);
+    void SetResolvedVelocityY(float resolvedVelocityY);
     void RenderText() const;
 
 private:
     Cute::v2 m_position;
+    Cute::v2 m_driftVelocity{0.0f, 0.0f};
     Cute::v2 m_velocity{0.0f, 0.0f};
+    Cute::v2 m_collisionVelocity{0.0f, 0.0f};
     float m_radius;
     CF_Color m_color;
 
@@ -56,9 +60,11 @@ private:
     float m_burstStrength = 0.8f;
     float m_smoothing = 4.0f; // higher = snappier
     float m_rebound = 0.9f;
+    float m_collisionDamping = 5.5f;
+    float m_collisionKick = 36.0f;
     int m_fontSize = 20;
-    ScreenBorderCollisionProvider m_screenBorderCollisionProvider;
-    std::vector<const core::interfaces::ICollisionProvider*> m_collisionProviders;
+    objects::ScreenBorderCollisionProvider m_screenBorderCollisionProvider;
+    std::vector<const core::interfaces::ICollisionable*> m_collisionProviders;
 };
 
 }

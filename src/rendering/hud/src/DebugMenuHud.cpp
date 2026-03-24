@@ -8,7 +8,10 @@
 
 #include <imgui.h>
 
+#include "game/entities/headers/MazeRunner.h"
+#include "game/headers/MazeLayout.h"
 #include "game/entities/headers/PointEntity.h"
+#include "game/objects/headers/WallObject.h"
 
 namespace project_playground::rendering::hud {
 
@@ -47,22 +50,50 @@ CF_Color MakeRandomVisibleColor()
 std::unique_ptr<core::interfaces::IEntity> MakeEntityByType(std::string_view entityType, size_t existingEntityCount)
 {
     const std::string normalizedType = NormalizeEntityType(entityType);
-    if (normalizedType != "pointentity" && normalizedType != "point") {
-        return nullptr;
-    }
-
     const float horizontalIndex = static_cast<float>(existingEntityCount % 5);
     const float verticalIndex = static_cast<float>((existingEntityCount / 5) % 3);
     const float x = (horizontalIndex - 2.0f) * 80.0f;
     const float y = (1.0f - verticalIndex) * 80.0f;
-    const CF_Color color = MakeRandomVisibleColor();
 
-    return std::make_unique<game::entities::PointEntity>(x, y, 8.0f, color);
+    if (normalizedType == "pointentity" || normalizedType == "point") {
+        const CF_Color color = MakeRandomVisibleColor();
+        return std::make_unique<game::entities::PointEntity>(x, y, 8.0f, color);
+    }
+
+    if (normalizedType == "mazerunner" || normalizedType == "runner") {
+        const CF_Color runnerColor = Cute::make_color(0xff7a59, 0xff);
+        return std::make_unique<game::entities::MazeRunner>(
+            game::GetMazeRunnerSpawnPosition(existingEntityCount),
+            game::GetMazeRunnerGoalPosition(),
+            12.0f,
+            runnerColor,
+            144.0f);
+    }
+
+    return nullptr;
+}
+
+std::unique_ptr<core::interfaces::IObject> MakeCollisionObjectByType(
+    std::string_view entityType,
+    size_t existingObjectCount)
+{
+    const std::string normalizedType = NormalizeEntityType(entityType);
+    if (normalizedType != "wallentity" && normalizedType != "wall") {
+        return nullptr;
+    }
+
+    const float horizontalIndex = static_cast<float>(existingObjectCount % 5);
+    const float verticalIndex = static_cast<float>((existingObjectCount / 5) % 3);
+    const float x = (horizontalIndex - 2.0f) * 120.0f;
+    const float y = (1.0f - verticalIndex) * 80.0f;
+    return std::make_unique<game::objects::WallObject>(x, y, 120.0f, 24.0f, Cute::make_color(0x9fb3c8, 0xff));
 }
 }
 
-DebugMenuHud::DebugMenuHud(core::interfaces::IEntityContainer& entityContainer)
-    : m_entityContainer(entityContainer)
+DebugMenuHud::DebugMenuHud(
+    core::interfaces::IEntityContainer& entityContainer,
+    core::interfaces::IObjectContainer& objectContainer)
+    : m_entityContainer(entityContainer), m_objectContainer(objectContainer)
 {
 }
 
@@ -83,7 +114,7 @@ void DebugMenuHud::Render() const
     ImGui::SetNextWindowSize(ImVec2(320.0f, 220.0f), ImGuiCond_FirstUseEver);
 
     ImGui::Begin("Debug Menu", nullptr, ImGuiWindowFlags_NoCollapse);
-    ImGui::Text("Entity counts by type");
+    ImGui::Text("Object counts by type");
     ImGui::Separator();
 
     const std::string summary = BuildEntitySummary();
@@ -104,7 +135,7 @@ void DebugMenuHud::Render() const
         const_cast<DebugMenuHud*>(this)->AddEntityFromInput();
     }
 
-    ImGui::TextDisabled("Supported: PointEntity");
+    ImGui::TextDisabled("Supported: PointEntity, MazeRunner, WallObject");
     ImGui::TextDisabled("Toggle menu: F2");
 
     if (!m_feedbackMessage.empty()) {
@@ -118,17 +149,26 @@ void DebugMenuHud::Render() const
 void DebugMenuHud::AddEntityFromInput()
 {
     const size_t existingEntityCount = m_entityContainer.GetEntities().size();
-    std::unique_ptr<core::interfaces::IEntity> entity = MakeEntityByType(m_entityTypeInput.data(), existingEntityCount);
-    if (!entity) {
-        m_lastActionSucceeded = false;
-        m_feedbackMessage = "Unsupported entity type.";
+    if (std::unique_ptr<core::interfaces::IEntity> entity = MakeEntityByType(m_entityTypeInput.data(), existingEntityCount)) {
+        const std::string entityType(entity->GetTypeName());
+        m_entityContainer.AddEntity(std::move(entity));
+        m_lastActionSucceeded = true;
+        m_feedbackMessage = "Added " + entityType + ".";
         return;
     }
 
-    const std::string entityType(entity->GetTypeName());
-    m_entityContainer.AddEntity(std::move(entity));
-    m_lastActionSucceeded = true;
-    m_feedbackMessage = "Added " + entityType + ".";
+    const size_t existingCollisionObjectCount = m_objectContainer.GetObjects().size();
+    if (std::unique_ptr<core::interfaces::IObject> collisionObject =
+            MakeCollisionObjectByType(m_entityTypeInput.data(), existingCollisionObjectCount)) {
+        const std::string objectType(static_cast<const game::objects::WallObject&>(*collisionObject).GetTypeName());
+        m_objectContainer.AddObject(std::move(collisionObject));
+        m_lastActionSucceeded = true;
+        m_feedbackMessage = "Added " + objectType + ".";
+        return;
+    }
+
+    m_lastActionSucceeded = false;
+    m_feedbackMessage = "Unsupported entity type.";
 }
 
 std::string DebugMenuHud::BuildEntitySummary() const
@@ -136,6 +176,12 @@ std::string DebugMenuHud::BuildEntitySummary() const
     std::map<std::string, int> counts;
     for (const auto& entity : m_entityContainer.GetEntities()) {
         ++counts[std::string(entity->GetTypeName())];
+    }
+
+    for (const auto& object : m_objectContainer.GetObjects()) {
+        if (const auto* wallEntity = dynamic_cast<const game::objects::WallObject*>(object.get())) {
+            ++counts[std::string(wallEntity->GetTypeName())];
+        }
     }
 
     if (counts.empty()) {

@@ -13,13 +13,10 @@ public:
     explicit EntityContainer(std::vector<std::unique_ptr<interfaces::IEntity>> entities);
 
     void AddEntity(std::unique_ptr<interfaces::IEntity> entity) override;
-
     std::vector<std::unique_ptr<interfaces::IEntity>>& GetEntities() override;
     const std::vector<std::unique_ptr<interfaces::IEntity>>& GetEntities() const override;
 
 private:
-    void SynchronizeCollisionProviders();
-
     std::vector<std::unique_ptr<interfaces::IEntity>> m_entities;
 };
 

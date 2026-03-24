@@ -4,9 +4,13 @@ namespace project_playground::core {
 
 GameRenderer::GameRenderer(
     const interfaces::IEntityContainer& entityContainer,
+    const interfaces::IObjectContainer& objectContainer,
     std::unique_ptr<interfaces::IRenderable> background,
     std::vector<std::unique_ptr<interfaces::IHud>> hudElements)
-    : m_entityContainer(entityContainer), m_background(std::move(background)), m_hudElements(std::move(hudElements))
+    : m_entityContainer(entityContainer),
+      m_objectContainer(objectContainer),
+      m_background(std::move(background)),
+      m_hudElements(std::move(hudElements))
 {
 }
 
@@ -16,8 +20,16 @@ void GameRenderer::Render() const
         m_background->Render();
     }
 
+    RenderCollisionObjects();
     RenderEntities();
     RenderHud();
+}
+
+void GameRenderer::RenderCollisionObjects() const
+{
+    for (const auto& object : m_objectContainer.GetObjects()) {
+        object->Render();
+    }
 }
 
 void GameRenderer::RenderEntities() const

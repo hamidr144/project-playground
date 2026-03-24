@@ -1,8 +1,8 @@
-#include "game/entities/headers/ScreenBorderCollisionProvider.h"
+#include "game/objects/headers/ScreenBorderCollisionProvider.h"
 
 #include "cute.h"
 
-namespace project_playground::game::entities {
+namespace project_playground::game::objects {
 
 core::interfaces::CollisionBounds ScreenBorderCollisionProvider::GetCollisionBounds() const
 {
@@ -16,6 +16,10 @@ core::interfaces::CollisionBounds ScreenBorderCollisionProvider::GetCollisionBou
         halfHeight,
         core::interfaces::CollisionBoundsType::Containment,
     };
+}
+
+void ScreenBorderCollisionProvider::Render() const
+{
 }
 
 }

@@ -19,6 +19,28 @@ float GetResolutionDirection(float selfCenter, float otherCenter, float velocity
 
     return velocity <= 0.0f ? 1.0f : -1.0f;
 }
+
+float Dot(const Cute::v2& lhs, const Cute::v2& rhs)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+
+Cute::v2 MakeNormal(float x, float y, const Cute::v2& fallback)
+{
+    const float lengthSquared = x * x + y * y;
+    if (lengthSquared > 0.0001f) {
+        const float invLength = 1.0f / std::sqrt(lengthSquared);
+        return Cute::v2(x * invLength, y * invLength);
+    }
+
+    const float fallbackLengthSquared = fallback.x * fallback.x + fallback.y * fallback.y;
+    if (fallbackLengthSquared > 0.0001f) {
+        const float invLength = 1.0f / std::sqrt(fallbackLengthSquared);
+        return Cute::v2(fallback.x * invLength, fallback.y * invLength);
+    }
+
+    return Cute::v2(1.0f, 0.0f);
+}
 }
 
 namespace project_playground::game::entities {
@@ -70,7 +92,7 @@ core::interfaces::CollisionBounds PointEntity::GetCollisionBounds() const
     };
 }
 
-void PointEntity::SetCollisionProviders(std::vector<const core::interfaces::ICollisionProvider*> collisionProviders)
+void PointEntity::SetCollisionProviders(std::vector<const core::interfaces::ICollisionable*> collisionProviders)
 {
     m_collisionProviders = std::move(collisionProviders);
 }
@@ -102,12 +124,18 @@ void PointEntity::Update()
     float vx = driftVx + wanderVx + burstVx + driftVy * m_swirlStrength;
     float vy = driftVy + wanderVy + burstVy - driftVx * m_swirlStrength;
 
-    Cute::v2 targetVel = Cute::v2(vx, vy);
-
     if (dt > 0.0f) {
+        const float collisionDecay = std::exp(-m_collisionDamping * dt);
+        m_collisionVelocity.x *= collisionDecay;
+        m_collisionVelocity.y *= collisionDecay;
+
+        Cute::v2 targetVel = Cute::v2(vx, vy);
         float t = 1.0f - std::exp(-m_smoothing * dt);
-        m_velocity.x = m_velocity.x + (targetVel.x - m_velocity.x) * t;
-        m_velocity.y = m_velocity.y + (targetVel.y - m_velocity.y) * t;
+        m_driftVelocity.x = m_driftVelocity.x + (targetVel.x - m_driftVelocity.x) * t;
+        m_driftVelocity.y = m_driftVelocity.y + (targetVel.y - m_driftVelocity.y) * t;
+
+        m_velocity.x = m_driftVelocity.x + m_collisionVelocity.x;
+        m_velocity.y = m_driftVelocity.y + m_collisionVelocity.y;
 
         m_position.x += m_velocity.x * dt;
         m_position.y += m_velocity.y * dt;
@@ -156,8 +184,25 @@ void PointEntity::HandleCollisions()
             continue;
         }
 
+        if (const auto* otherPoint = dynamic_cast<const PointEntity*>(collisionProvider)) {
+            ResolvePointCollision(*otherPoint);
+            continue;
+        }
+
         ResolveCollisionBounds(collisionProvider->GetCollisionBounds());
     }
+}
+
+void PointEntity::SetResolvedVelocityX(float resolvedVelocityX)
+{
+    m_collisionVelocity.x = resolvedVelocityX - m_driftVelocity.x;
+    m_velocity.x = resolvedVelocityX;
+}
+
+void PointEntity::SetResolvedVelocityY(float resolvedVelocityY)
+{
+    m_collisionVelocity.y = resolvedVelocityY - m_driftVelocity.y;
+    m_velocity.y = resolvedVelocityY;
 }
 
 void PointEntity::ResolveCollisionBounds(const core::interfaces::CollisionBounds& collisionBounds)
@@ -170,18 +215,18 @@ void PointEntity::ResolveCollisionBounds(const core::interfaces::CollisionBounds
 
         if (m_position.x < minX) {
             m_position.x = minX;
-            m_velocity.x = -m_velocity.x * m_rebound;
+            SetResolvedVelocityX(std::max(std::abs(m_velocity.x) * m_rebound, m_collisionKick));
         } else if (m_position.x > maxX) {
             m_position.x = maxX;
-            m_velocity.x = -m_velocity.x * m_rebound;
+            SetResolvedVelocityX(-std::max(std::abs(m_velocity.x) * m_rebound, m_collisionKick));
         }
 
         if (m_position.y < minY) {
             m_position.y = minY;
-            m_velocity.y = -m_velocity.y * m_rebound;
+            SetResolvedVelocityY(std::max(std::abs(m_velocity.y) * m_rebound, m_collisionKick));
         } else if (m_position.y > maxY) {
             m_position.y = maxY;
-            m_velocity.y = -m_velocity.y * m_rebound;
+            SetResolvedVelocityY(-std::max(std::abs(m_velocity.y) * m_rebound, m_collisionKick));
         }
 
         return;
@@ -203,13 +248,52 @@ void PointEntity::ResolveCollisionBounds(const core::interfaces::CollisionBounds
     if (overlapX < overlapY) {
         const float direction = GetResolutionDirection(selfCenterX, otherCenterX, m_velocity.x);
         m_position.x += direction * overlapX;
-        m_velocity.x = -m_velocity.x * m_rebound;
+        const float reboundVelocityX = direction * std::max(std::abs(m_velocity.x) * m_rebound, m_collisionKick + overlapX * 10.0f);
+        SetResolvedVelocityX(reboundVelocityX);
         return;
     }
 
     const float direction = GetResolutionDirection(selfCenterY, otherCenterY, m_velocity.y);
     m_position.y += direction * overlapY;
-    m_velocity.y = -m_velocity.y * m_rebound;
+    const float reboundVelocityY = direction * std::max(std::abs(m_velocity.y) * m_rebound, m_collisionKick + overlapY * 10.0f);
+    SetResolvedVelocityY(reboundVelocityY);
+}
+
+void PointEntity::ResolvePointCollision(const PointEntity& otherPoint)
+{
+    const float offsetX = m_position.x - otherPoint.m_position.x;
+    const float offsetY = m_position.y - otherPoint.m_position.y;
+    const float minDistance = m_radius + otherPoint.m_radius;
+    const float distanceSquared = offsetX * offsetX + offsetY * offsetY;
+
+    if (distanceSquared >= minDistance * minDistance) {
+        return;
+    }
+
+    const Cute::v2 relativeVelocity = Cute::v2(
+        m_velocity.x - otherPoint.m_velocity.x,
+        m_velocity.y - otherPoint.m_velocity.y);
+    const Cute::v2 normal = MakeNormal(offsetX, offsetY, relativeVelocity);
+    const Cute::v2 tangent(-normal.y, normal.x);
+    const float distance = std::sqrt(std::max(distanceSquared, 0.0f));
+    const float penetration = minDistance - distance;
+    const float separationSpeed = std::max(0.0f, -Dot(m_velocity, normal));
+    const float kickSpeed = std::clamp(
+        m_collisionKick + penetration * 18.0f + separationSpeed * 0.2f,
+        m_collisionKick,
+        m_collisionKick * 2.5f);
+    const float tangentSpeed = Dot(m_velocity, tangent) * 0.85f;
+
+    m_position.x += normal.x * penetration;
+    m_position.y += normal.y * penetration;
+
+    const Cute::v2 resolvedVelocity = Cute::v2(
+        tangent.x * tangentSpeed + normal.x * kickSpeed,
+        tangent.y * tangentSpeed + normal.y * kickSpeed);
+
+    m_collisionVelocity.x = resolvedVelocity.x - m_driftVelocity.x;
+    m_collisionVelocity.y = resolvedVelocity.y - m_driftVelocity.y;
+    m_velocity = resolvedVelocity;
 }
 
 std::string PointEntity::GetPositionText() const

@@ -3,6 +3,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     src/GameLogicManager.cpp
     src/GameRenderer.cpp
     src/InputHandler.cpp
+    src/ObjectContainer.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

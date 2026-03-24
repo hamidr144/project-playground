@@ -4,13 +4,13 @@
 
 namespace project_playground::core::interfaces {
 
-class ICollisionProvider;
+class ICollisionable;
 
 class ICollisionHandler {
 public:
     virtual ~ICollisionHandler() = default;
 
-    virtual void SetCollisionProviders(std::vector<const ICollisionProvider*> collisionProviders) = 0;
+    virtual void SetCollisionProviders(std::vector<const ICollisionable*> collisionProviders) = 0;
 };
 
 }

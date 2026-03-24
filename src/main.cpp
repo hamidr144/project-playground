@@ -4,6 +4,5 @@ int main(int argc, char* argv[])
 {
     (void)argc;
 
-    project_playground::app::Application app;
-    return app.Run(argv[0]);
+    return project_playground::app::Application::GetInstance().Run(argv[0]);
 }

@@ -1,6 +1,7 @@
 target_sources(${PROJECT_NAME} PRIVATE
-    src/MazeRunner.cpp
-    src/PointEntity.cpp
+    src/MazeBoundary.cpp
+    src/ScreenBorderCollisionProvider.cpp
+    src/WallObject.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
